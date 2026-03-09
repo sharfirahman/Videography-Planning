@@ -1,0 +1,71 @@
+#!/usr/bin/python3
+
+import pandas as pd
+import numpy as np
+
+def summarize_experiment(df_root, expr_name: str):
+    df_ppa = pd.read_csv(f"{expr_name}/ppa_evaluation.csv")
+    df_image = pd.read_csv(f"{expr_name}/image_evaluation.csv")
+
+    # print(df_ppa)
+    for col_name in df_ppa.columns[1:]:
+        median_ppa = np.median(df_ppa[col_name])
+        median_image = np.median(df_image[col_name])
+        sum_ppa = np.sum(df_ppa[col_name])
+        sum_image = np.sum(df_image[col_name])
+        # df_root["Median Image"][expr_name] = median_image
+        # df_root["Median PPA"][expr_name] = median_ppa
+        # df_root["Total Image"][expr_name] = sum_image
+        # df_root["Total PPA"][expr_name] = sum_ppa
+        df_root[col_name + "_" + "SRPPA"][expr_name] = sum_ppa / 100.
+        df_root[col_name + "_" + "Image"][expr_name] = sum_image / 1000.
+
+
+def main():
+
+    experiments = [
+        "cluster",
+        "cross_mix",
+        "four_split",
+        "priority_runners",
+        "priority_speaker",
+        "split_and_join",
+        "spreadout_group",
+        "track_runners",
+        "heavy_mixing"
+    ]
+
+    planners = [
+        "formation",
+        "assignment",
+        "myopic",
+        "greedy",
+        "multipleroundsgreedy",
+    ]
+
+    views = [
+        "SRPPA",
+        "Image",
+    ]
+
+    cols = []
+    for pl in planners:
+        for v in views:
+            cols.append(pl + "_" + v)
+
+
+    row_data = [0 for _ in cols]
+    df_root = pd.DataFrame(data=[row_data for _ in experiments], columns=cols, index=experiments)
+    for expr_name in experiments:
+        summarize_experiment(df_root, expr_name)
+
+    df_root.to_csv("data_summary.csv")
+
+    # for row in df_root.iterrows():
+    #     print(row[0], np.max(np.array(row[1].to_list())))
+      
+    print(df_root)
+    print("Wrote data_summary.csv")
+
+if __name__ == "__main__":
+    main()
