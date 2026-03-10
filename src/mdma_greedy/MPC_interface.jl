@@ -7,13 +7,13 @@
 ENV["GKSwstype"] = "100"
 
 include("./MPC.jl")
-include("./DroneVisualization.jl")
+include("./DroneVisualizationFPV.jl")
 
 
 using .MPC
 using .MPC.ActorMesh
 using .MPC.ActorTrajectory
-using .DroneVisualization
+using .DroneVisualizationFPV
 
 function run_drone_actor_simulation(;
     num_steps::Int = 200,

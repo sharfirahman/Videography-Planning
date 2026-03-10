@@ -2,9 +2,9 @@ module DroneVisualizationFPV
 
 using Plots
 using LinearAlgebra
-using ..ActorMesh: actor_world_vertices, actor_world_face_center, actor_world_normal
+using ..MPC.ActorMesh: actor_world_vertices, actor_world_face_center, actor_world_normal
 
-export draw_quadcopter!, animate_drone_and_actor
+export draw_quadcopter!, animate_drone_and_actor, animate_multi_actor
 
 # #This idea came from the camera, 
 # function actor_edge_coords(actor)
@@ -24,20 +24,21 @@ function project_to_fpv(
     tilt_angle::Float64   = -0.35,
     focal_length::Float64 =  1.2
 )
+
+    #Here we are translating from the world frame to the drone frame
     dx = world_pt[1] - drone[1]
     dy = world_pt[2] - drone[2]
     dz = world_pt[3] - drone[3]
 
     yaw = drone[7]
 
-    # As the fpv is 2D, the drone needs to- 
+    # As the fpv is 2D, the drone needs to - 
     bx =  dx * cos(yaw) + dy * sin(yaw) #go forward with actor
     by = -dx * sin(yaw) + dy * cos(yaw) #go further left, as it is rotating around yaw angle
     bz =  dz
 
 
-    #For further convenience, we are assuming the camera as separate from the drone
-    #so this will be the gimbal, with a camera to have the calculation 
+    # we are adding a gimbal on top of the drone, so we need to calculate the gimbal distance from the drone body
     # tilt camera downward (rotation around body-Y axis)
     cx =  bx * cos(tilt_angle) + bz * sin(tilt_angle)   # forward depth of the camera
     cy =  by                                              # lateral
@@ -53,7 +54,7 @@ function project_to_fpv(
 end
 
 function project_vertices_fpv(world_verts, drone; kwargs...)
-    [let (pt, ok) = project_to_fpv(v, drone; kwargs...); ok ? pt : nothing end
+    [let (pt, ok) = project_to_fpv(v, drone; kwargs...); ok ? pt : nothing end #Array comprehension
      for v in world_verts]
 end
 
@@ -61,32 +62,32 @@ end
 #  FPV PANEL
 # 
 
-function draw_fpv_panel!(p, actor, drone,
+# draw_fpv_panel! — multi-actor version
+# actors      : all ActorState objects at this frame
+# primary_idx : index into actors that the drone is targeting
+# trail_xs/ys/zs : past positions of the primary actor
+function draw_fpv_panel!(p, actors::Vector, primary_idx::Int, drone,
                          trail_xs, trail_ys, trail_zs;
                          tilt_angle=-0.35, focal_length=1.2,
                          grid_range=-8:2:8)
 
     kw = (tilt_angle=tilt_angle, focal_length=focal_length)
 
-    # Ground grid (XY plane, z=0)
-    # Project a regular grid of lines onto the FPV screen — gives the same
-    # spatial reference as the axes/grid in the world view.
+    # Ground grid
     for gx in grid_range
-        # Lines running along Y axis at fixed X
         pa, ok_a = project_to_fpv([Float64(gx), Float64(first(grid_range)), 0.0], drone; kw...)
         pb, ok_b = project_to_fpv([Float64(gx), Float64(last(grid_range)),  0.0], drone; kw...)
         ok_a && ok_b && plot!(p, [pa[1], pb[1]], [pa[2], pb[2]],
                               color=:gray40, linewidth=0.8, alpha=0.5, label="")
     end
     for gy in grid_range
-        # Lines running along X axis at fixed Y
         pa, ok_a = project_to_fpv([Float64(first(grid_range)), Float64(gy), 0.0], drone; kw...)
         pb, ok_b = project_to_fpv([Float64(last(grid_range)),  Float64(gy), 0.0], drone; kw...)
         ok_a && ok_b && plot!(p, [pa[1], pb[1]], [pa[2], pb[2]],
                               color=:gray40, linewidth=0.8, alpha=0.5, label="")
     end
 
-    # Axis lines (X = red, Y = green, Z = blue at origin)
+    # Axis lines
     ax_len = Float64(last(grid_range))
     for (tip, col) in [([ax_len, 0.0, 0.0], :red),
                         ([0.0, ax_len, 0.0], :green),
@@ -97,67 +98,63 @@ function draw_fpv_panel!(p, actor, drone,
                               color=col, linewidth=1.5, alpha=0.7, label="")
     end
 
-    #Actor trajectory trail (blue, same as world view) 
-    # Project each past position and connect as a line
+    # Primary actor trail
     trail_pts = []
     for (tx, ty, tz) in zip(trail_xs, trail_ys, trail_zs)
         pt, ok = project_to_fpv([tx, ty, tz], drone; kw...)
         push!(trail_pts, ok ? pt : nothing)
     end
-
-    # Draw connected segments — skip any that go behind camera
     for k in 2:length(trail_pts)
         p1, p2 = trail_pts[k-1], trail_pts[k]
         (p1 === nothing || p2 === nothing) && continue
         plot!(p, [p1[1], p2[1]], [p1[2], p2[2]],
               color=:royalblue, linewidth=2.0, alpha=0.8, label="")
     end
-
-    # Start dot on trail
     if !isempty(trail_pts) && trail_pts[1] !== nothing
         scatter!(p, [trail_pts[1][1]], [trail_pts[1][2]],
                  markersize=5, color=:lightblue, markerstrokewidth=0, label="")
     end
 
-    #Actor bounding box 
-    world_verts = actor_world_vertices(
-        actor.mesh, actor.x, actor.y, actor.z, actor.heading)
-    proj = project_vertices_fpv(world_verts, drone; kw...)
+    # All actors: draw mesh in FPV. Targeting box only on primary.
+    for (a_idx, actor) in enumerate(actors)
+        world_verts = actor_world_vertices(
+            actor.mesh, actor.x, actor.y, actor.z, actor.heading)
+        proj = project_vertices_fpv(world_verts, drone; kw...)
 
-    # Wireframe edges
-    for (i1, i2) in actor.mesh.edges
-        p1, p2 = proj[i1], proj[i2]
-        (p1 === nothing || p2 === nothing) && continue
-        plot!(p, [p1[1], p2[1]], [p1[2], p2[2]],
-              color=:white, linewidth=1.8, label="")
+        edge_col = (a_idx == primary_idx) ? :white : :gray70
+        for (i1, i2) in actor.mesh.edges
+            p1, p2 = proj[i1], proj[i2]
+            (p1 === nothing || p2 === nothing) && continue
+            plot!(p, [p1[1], p2[1]], [p1[2], p2[2]],
+                  color=edge_col, linewidth=(a_idx == primary_idx ? 1.8 : 1.0), label="")
+        end
+        for face in actor.mesh.faces
+            pts = [proj[idx] for idx in face.corner_indices]
+            any(x -> x === nothing, pts) && continue
+            us = [pt[1] for pt in pts]; push!(us, us[1])
+            vs = [pt[2] for pt in pts]; push!(vs, vs[1])
+            plot!(p, Shape(us, vs),
+                  fillalpha=(a_idx == primary_idx ? 0.40 : 0.20),
+                  fillcolor=face.color, linewidth=0)
+        end
+
+        # Targeting box — primary actor only (Axis-Aligned bounding box)
+        if a_idx == primary_idx
+            valid = filter(x -> x !== nothing, proj)
+            if length(valid) >= 4
+                us_a = [pt[1] for pt in valid]
+                vs_a = [pt[2] for pt in valid]
+                pad  = 0.025
+                u0, u1 = minimum(us_a) - pad, maximum(us_a) + pad
+                v0, v1 = minimum(vs_a) - pad, maximum(vs_a) + pad
+                plot!(p, [u0, u1, u1, u0, u0], [v0, v0, v1, v1, v0],
+                      color=:blue, linewidth=1.6, linestyle=:dash, alpha=0.9, label="")
+                annotate!(p, u0, v1 + 0.035, text("TARGET", :left, :blue, 7))
+            end
+        end
     end
 
-    # Face fills
-    for face in actor.mesh.faces
-        pts = [proj[idx] for idx in face.corner_indices]
-        any(x -> x === nothing, pts) && continue
-        us = [pt[1] for pt in pts]; push!(us, us[1])
-        vs = [pt[2] for pt in pts]; push!(vs, vs[1])
-        # plot!(p, us, vs,
-        #       fillrange=0, fillalpha=0.40, fillcolor=face.color,
-        #       linewidth=0, label="")
-        plot!(p, Shape(us, vs), fillalpha=0.40, fillcolor=face.color, linewidth=0)
-    end
-
-    #Targeting box 
-    valid = filter(x -> x !== nothing, proj)
-    if length(valid) >= 4
-        us_a = [pt[1] for pt in valid]
-        vs_a = [pt[2] for pt in valid]
-        pad  = 0.025
-        u0, u1 = minimum(us_a) - pad, maximum(us_a) + pad
-        v0, v1 = minimum(vs_a) - pad, maximum(vs_a) + pad
-        plot!(p, [u0, u1, u1, u0, u0], [v0, v0, v1, v1, v0],
-              color=:blue, linewidth=1.6, linestyle=:dash, alpha=0.9, label="")
-        annotate!(p, u0, v1 + 0.035, text("TARGET", :left, :blue, 7))
-    end
-
-    # HUD crosshair 
+    # HUD crosshair
     ch, gap = 0.055, 0.015
     for (x1, x2, y1, y2) in [( gap,  ch,  0.0,  0.0),
                                (-ch, -gap,  0.0,  0.0),
@@ -167,21 +164,30 @@ function draw_fpv_panel!(p, actor, drone,
     end
     scatter!(p, [0.0], [0.0], markersize=3, color=:black, markerstrokewidth=0, label="")
 
-    # HUD readouts
-    dist     = norm([actor.x - drone[1], actor.y - drone[2], actor.z - drone[3]])
+    # HUD readouts — distance to primary actor
+    primary = actors[primary_idx]
+    dist     = norm([primary.x - drone[1], primary.y - drone[2], primary.z - drone[3]])
     tilt_deg = round(Int, tilt_angle * 180 / π)
     xl       = Plots.xlims(p)[1]
     annotate!(p, xl + 0.02, -0.44, text("DST  $(lpad(round(Int,dist*10)/10, 4))m", :left, :lime, 8))
     annotate!(p, xl + 0.02, -0.50, text("ALT  $(lpad(round(Int,drone[3]*10)/10, 4))m", :left, :lime, 8))
     annotate!(p, xl + 0.02, -0.56, text("TILT $(tilt_deg)°", :left, :blue, 8))
+    annotate!(p, xl + 0.02, -0.62, text("ACT  #$(primary_idx)/$(length(actors))", :left, :yellow, 8))
 
-    # Corner bracket reticle 
+    # Corner bracket reticle
     bx_h, by_h, bl = 0.60, 0.44, 0.07
     for (sx, sy) in [(1,1),(-1,1),(1,-1),(-1,-1)]
         plot!(p, [sx*bx_h, sx*bx_h, sx*(bx_h-bl)],
                  [sy*(by_h-bl), sy*by_h, sy*by_h],
               color=:black, linewidth=1.5, alpha=0.7, label="")
     end
+end
+
+# Backward-compat single-actor wrapper (keeps first_person_view.jl working)
+function draw_fpv_panel!(p, actor, drone, trail_xs, trail_ys, trail_zs;
+                         tilt_angle=-0.35, focal_length=1.2, grid_range=-8:2:8)
+    draw_fpv_panel!(p, [actor], 1, drone, trail_xs, trail_ys, trail_zs;
+                    tilt_angle=tilt_angle, focal_length=focal_length, grid_range=grid_range)
 end
 
 # 
@@ -339,6 +345,104 @@ function animate_drone_and_actor(
                   text("● REC", :right, :red, 8))
 
         # Combine
+        plot(p_world, p_fpv, layout=(1, 2), size=(1400, 700))
+    end
+
+    println("Saving animation → $anim_file …")
+    gif(anim, anim_file, fps=fps)
+    return anim
+end
+
+function animate_multi_actor(
+    all_actor_trajs::Vector,
+    drone_trajectory::Vector{Vector{Float64}};
+    primary_actor_idx::Int = 1,
+    anim_file::String      = "multi_actor_tracking.gif",
+    fps::Int               = 10,
+    xlims::Tuple           = (-6.0, 6.0),
+    ylims::Tuple           = (-6.0, 6.0),
+    zlims::Tuple           = ( 0.0, 4.0),
+    camera::Tuple          = (25, 45),
+    fpv_tilt::Float64      = -0.35,
+    fpv_fov::Float64       =  1.2,
+    fpv_view_size::Float64 =  0.68
+)
+    num_actors = length(all_actor_trajs)
+    num_frames = min(minimum(length.(all_actor_trajs)), length(drone_trajectory))
+    vs = fpv_view_size
+
+    # Pre-extract primary actor trail for FPV draw
+    primary_traj = all_actor_trajs[primary_actor_idx]
+    primary_xs = [a.x for a in primary_traj]
+    primary_ys = [a.y for a in primary_traj]
+    primary_zs = [a.z for a in primary_traj]
+
+    drone_xs = [d[1] for d in drone_trajectory]
+    drone_ys = [d[2] for d in drone_trajectory]
+    drone_zs = [d[3] for d in drone_trajectory]
+
+    anim = @animate for i in 1:num_frames
+        drone = drone_trajectory[i]
+        current_actors = [traj[i] for traj in all_actor_trajs]
+        primary_actor = current_actors[primary_actor_idx]
+
+        p_world = plot(
+            xlabel="X (m)", ylabel="Y (m)", zlabel="Z (m)",
+            title="World View  |  Frame $i / $num_frames",
+            legend=:topright, camera=camera,
+            xlims=xlims, ylims=ylims, zlims=zlims,
+            background_color=:white, size=(700, 700)
+        )
+
+        plot!(p_world, drone_xs[1:i], drone_ys[1:i], drone_zs[1:i],
+              linewidth=3, color=:red,  alpha=0.6, label="Drone Path")
+        draw_quadcopter!(p_world, drone, 0.3, 0.15)
+
+        for (a_idx, actor) in enumerate(current_actors)
+            traj = all_actor_trajs[a_idx]
+            axs = [a.x for a in traj]
+            ays = [a.y for a in traj]
+            azs = [a.z for a in traj]
+            
+            # Draw path
+            col = (a_idx == primary_actor_idx) ? :blue : :orange
+            plot!(p_world, axs[1:i], ays[1:i], azs[1:i],
+                  linewidth=(a_idx == primary_actor_idx ? 3 : 2), 
+                  color=col, alpha=0.6, label=(a_idx == primary_actor_idx ? "Primary Path" : "Actor Path"))
+            
+            # Start position
+            scatter!(p_world, [axs[1]], [ays[1]], [azs[1]],
+                     markersize=5, color=col, marker=:square, label="")
+            
+            # Draw actor mesh
+            world_verts = actor_world_vertices(actor.mesh, actor.x, actor.y, actor.z, actor.heading)
+            draw_colored_actor!(p_world, actor, world_verts)
+        end
+
+        # Line of sight
+        plot!(p_world,
+              [drone[1], primary_actor.x], [drone[2], primary_actor.y], [drone[3], primary_actor.z],
+              linestyle=:dash, color=:gray, linewidth=1, alpha=0.4, label="LoS")
+
+        scatter!(p_world, [drone_xs[1]], [drone_ys[1]], [drone_zs[1]],
+                 markersize=6, color=:pink, marker=:square, label="Drone Start")
+
+        # RIGHT: FPV panel 
+        p_fpv = plot(
+            title="FPV Camera", legend=false,
+            xlims=(-vs, vs), ylims=(-vs * 0.72, vs * 0.72),
+            aspect_ratio=:equal, background_color=:black,
+            foreground_color_axis=:white, foreground_color_border=:black,
+            grid=false, ticks=false, framestyle=:box, size=(700, 700)
+        )
+
+        draw_fpv_panel!(p_fpv, current_actors, primary_actor_idx, drone,
+                        primary_xs[1:i], primary_ys[1:i], primary_zs[1:i];
+                        tilt_angle=fpv_tilt, focal_length=fpv_fov)
+
+        annotate!(p_fpv, vs - 0.02, -vs*0.72 + 0.04, text("FPV · DRONE CAM", :right, :black, 8))
+        annotate!(p_fpv, vs - 0.02,  vs*0.72 - 0.04, text("● REC", :right, :red, 8))
+
         plot(p_world, p_fpv, layout=(1, 2), size=(1400, 700))
     end
 

@@ -68,15 +68,13 @@ function RobotDynamics(state,control,dt)
 end
 
 #Add the reward function helpers
+# Smooth approximation of max(0, -dot(distance, face_normal))
 function isvisible(
     distance::Vector,
     face_normal::Vector
 )
-    if dot(distance, face_normal) < 0  #this is a jump expression that is mismatching cause the dot product is a symbolic jump expression, and 0 is bool
-        return 1
-    else
-        return 0
-    end
+    x = -dot(distance, face_normal)
+    return (x + sqrt(x^2 + 1e-4)) / 2.0
 end
 
 
@@ -88,11 +86,18 @@ function compute_camera_coverage(
     alpha = 1.0
     face_normal = face.normal
 
+
+    # current_pixel_density =
+    #     alpha *
+    #     abs(dot(distance, heading)) *
+    #     -dot(distance, face_normal) *
+    #     isvisible(distance, face_normal) / norm(distance)^4
+
     current_pixel_density =
         alpha *
         sqrt(dot(distance, heading)^2 + 1e-4) *
-        ((-dot(distance, face_normal) + sqrt((-dot(distance, face_normal))^2 + 1e-4)) / 2.0) / 
-        (dot(distance, distance)^2 + 1e-4)
+        isvisible(distance, face_normal) /
+        (dot(distance, distance)^2 + 1e-4)  #(norm(distance)^2)^2) = dot(distance,distance)^2 
 end
 
 function face_view_quality(face::ActorFace, coverage_value)
