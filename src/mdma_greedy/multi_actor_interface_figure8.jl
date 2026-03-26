@@ -18,7 +18,7 @@ using .DroneVisualizationFPV
 # ─── configuration ────────────────────────────────────────────────────────────
 const NUM_STEPS       = 200
 const PRIMARY_IDX     = 1        # actor the drone tracks
-const OUTPUT_FILE     = "multi_actor_fpv_figure8.gif"
+const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_fpv_figure8.gif\"
 const FPS             = 12
 
 # Actor geometry (shared mesh for both)
@@ -36,7 +36,7 @@ const A1_ORIGIN       = [0.0, 0.0, 0.0]
 const A2_SCALE        = 3.5
 const A2_ANG_VEL      = 2π / 20.0
 const A2_ORIGIN       = [4.0, 4.0, 0.0]
-const OUTPUT_FILE     = "multi_actor_fpv_figure8.gif"
+const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_fpv_figure8.gif\"
 
 # MPC parameters
 const HORIZON         = 10

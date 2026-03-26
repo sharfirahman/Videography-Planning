@@ -37,7 +37,7 @@ const FPV_FOV       =  1.2   # focal length  (larger = narrower FOV)
 const FPV_VIEW_SIZE =  0.68  # half-width of FPV viewport in projection units
 
 # Output 
-const OUTPUT_FILE   = "drone_follows_actor_fpv.gif"
+const OUTPUT_FILE   = "src/mdma_greedy/drone_experiments/drone_follows_actor_fpv.gif\"
 const FPS           = 12
 const WORLD_XLIMS   = (-6.0,  6.0)
 const WORLD_YLIMS   = (-6.0,  6.0)

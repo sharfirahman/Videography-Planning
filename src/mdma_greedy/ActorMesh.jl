@@ -59,12 +59,12 @@ function build_actor_mesh(;
     top_bottom_area = d * w
 
 
-    faces = ActorFace[ ActorFace(:front, front_weight, [1.0,0.0,0.0], [d/2,0.0,0.0], :red, front_back_area, [2,3,7,6]),
-                        ActorFace(:back, back_weight, [-1.0,0.0,0.0], [-d/2,0.0,0.0], :black, front_back_area, [1,4,5,8]),
-                        ActorFace(:left, side_weight, [0.0,1.0,0.0], [0.0,w/2,0.0], :yellow, left_right_area, [4,3,7,8]),
-                        ActorFace(:right, side_weight, [0.0,-1.0,0.0], [0.0,-w/2,0.0], :yellow, left_right_area, [1,2,6,5]),
-                        ActorFace(:top, top_weight, [0.0,0.0,1.0], [0.0,0.0,h/2], :blue, top_bottom_area, [5,6,7,8]),
-                        ActorFace(:bottom, bottom_weight, [0.0,0.0,-1.0], [0.0,0.0,-h/2], :darkgray, top_bottom_area, [1,2,3,4])                
+    faces = ActorFace[ ActorFace(:front, front_weight, [1.0,0.0,0.0], [d/2,0.0,0.0], :blue, front_back_area, [2,3,7,6]),
+                        ActorFace(:back, back_weight, [-1.0,0.0,0.0], [-d/2,0.0,0.0], :navy, front_back_area, [1,4,8,5]),
+                        ActorFace(:left, side_weight, [0.0,1.0,0.0], [0.0,w/2,0.0], :royalblue, left_right_area, [4,3,7,8]),
+                        ActorFace(:right, side_weight, [0.0,-1.0,0.0], [0.0,-w/2,0.0], :deepskyblue, left_right_area, [1,2,6,5]),
+                        ActorFace(:top, top_weight, [0.0,0.0,1.0], [0.0,0.0,h/2], :lightblue, top_bottom_area, [5,6,7,8]),
+                        ActorFace(:bottom, bottom_weight, [0.0,0.0,-1.0], [0.0,0.0,-h/2], :steelblue, top_bottom_area, [1,2,3,4])                
     ]
 
     edges = Tuple{Int,Int}[

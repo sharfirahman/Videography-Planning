@@ -52,7 +52,7 @@ const DRONE_ABOVE   = 1.5    # metres above actor
 const FPV_TILT      = -20.0  # gimbal tilt in degrees (negative = nose-down)
 
 # ── Output ────────────────────────────────────────────────────────────────────
-const OUTPUT_FILE   = "drone_follows_actor_fpv.gif"
+const OUTPUT_FILE   = "src/mdma_greedy/drone_experiments/drone_follows_actor_fpv.gif\"
 const FPS           = 12
 const WORLD_XLIMS   = (-6.0,  6.0)
 const WORLD_YLIMS   = (-6.0,  6.0)

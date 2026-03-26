@@ -18,7 +18,7 @@ using .DroneVisualizationFPV
 # ─── configuration ────────────────────────────────────────────────────────────
 const NUM_STEPS       = 200
 const PRIMARY_IDX     = 1        # actor the drone tracks
-const OUTPUT_FILE     = "multi_actor_fpv_crossing.gif"
+const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_fpv_crossing.gif\"
 const FPS             = 12
 
 # Actor geometry (shared mesh for both)

@@ -12,11 +12,12 @@ using .MPC
 using .MPC.ActorMesh
 using .MPC.ActorTrajectory
 using .DroneVisualizationFPV
+using Profile
 
 
 const NUM_STEPS       = 200
 const PRIMARY_IDX     = 1        # actor the drone tracks
-const OUTPUT_FILE     = "multi_actor_fpv.gif"
+const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_fpv.gif\"
 const FPS             = 12
 
 # Actor geometry (shared mesh for both)
@@ -108,12 +109,24 @@ for step in 1:(length(primary_traj) - 1)
     horizon_end  = min(step + params.N - 1, length(primary_traj))
     actor_horizon = primary_traj[step:horizon_end]
 
-    pos_opt, vel_opt = SafeTrajectory(
-        current_pos,
-        [0.0, 0.0, 0.0, 0.0],
-        params,
-        actor_horizon
-    )
+    if step == 10
+        println("\n--- PROFILING SafeTrajectory AT STEP 10 ---")
+        @profile pos_opt, vel_opt = SafeTrajectory(
+            current_pos,
+            [0.0, 0.0, 0.0, 0.0],
+            params,
+            actor_horizon
+        )
+        Profile.print(format=:flat, sortedby=:count)
+        println("-------------------------------------------\n")
+    else
+        pos_opt, vel_opt = SafeTrajectory(
+            current_pos,
+            [0.0, 0.0, 0.0, 0.0],
+            params,
+            actor_horizon
+        )
+    end
 
     current_pos = RobotDynamics(current_pos, vel_opt[:, 1], params.Ts)
     push!(drone_trajectory, copy(current_pos))

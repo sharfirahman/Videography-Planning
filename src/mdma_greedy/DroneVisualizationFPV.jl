@@ -4,7 +4,8 @@ using Plots
 using LinearAlgebra
 using ..MPC.ActorMesh: actor_world_vertices, actor_world_face_center, actor_world_normal
 
-export draw_quadcopter!, animate_drone_and_actor, animate_multi_actor
+export draw_quadcopter!, animate_drone_and_actor, animate_multi_actor,
+       draw_colored_actor!, draw_fpv_panel!, project_to_fpv
 
 # #This idea came from the camera, 
 # function actor_edge_coords(actor)
@@ -46,7 +47,7 @@ function project_to_fpv(
 
     cx < 0.05 && return nothing, false    # behind or too close
 
-    # Pinhole camera model
+    # Pinhole camera model- 2D projection
     u =  focal_length * cy / cx
     v =  focal_length * cz / cx
 

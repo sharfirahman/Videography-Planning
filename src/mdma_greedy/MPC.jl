@@ -7,6 +7,7 @@ include("./ActorMesh.jl")
 include("./ActorTrajectory.jl")
 
 using LinearAlgebra
+using Profile
 using Ipopt
 using JuMP 
 using Plots
@@ -256,7 +257,6 @@ end
 
 
         end
-
         cost -= camera_coverage^2
 
         #control cost
