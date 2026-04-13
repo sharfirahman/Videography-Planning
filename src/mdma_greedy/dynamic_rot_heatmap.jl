@@ -7,11 +7,13 @@ ENV["GKSwstype"] = "100"
 
 include("./MPC.jl")
 include("./DroneVisualizationFPV.jl")
+include("./artistic_rules.jl")
 
 using .MPC
 using .MPC.ActorMesh
 using .MPC.ActorTrajectory
 using .DroneVisualizationFPV
+using .ArtisticRules
 using Plots
 using LinearAlgebra
 
@@ -22,6 +24,7 @@ using LinearAlgebra
 const NUM_STEPS       = 200
 const PRIMARY_IDX     = 1
 const FPS             = 12
+const OUTPUT_FILE     = "dynamic_rot_heatmap_2.gif"
 
 const ACTOR_WIDTH     = 0.5
 const ACTOR_DEPTH     = 0.3
@@ -52,61 +55,6 @@ const FPV_FOV         =  1.2
 const FPV_VIEW_SIZE   =  0.68
 
 # ─────────────────────────────────────────────────────────────
-#  DYNAMIC HEATMAP LOGIC
-# ─────────────────────────────────────────────────────────────
-
-function draw_dynamic_heatmap!(p, actor_u, actor_v, sec_u, sec_v; vs=0.68, plot_alpha=0.55)
-    u_vals = range(-vs, vs, length=60)
-    v_vals = range(-vs*0.72, vs*0.72, length=60)
-    
-    sigma_u = vs / 4.5
-    sigma_v = (vs * 0.72) / 4.5
-    
-    power_points = [
-        (-vs/3, -vs*0.72/3),
-        ( vs/3, -vs*0.72/3),
-        (-vs/3,  vs*0.72/3),
-        ( vs/3,  vs*0.72/3)
-    ]
-    
-    activations = zeros(4)
-    for (idx, (cu, cv)) in enumerate(power_points)
-        activation = 0.15 # Baseline glow
-        
-        # Primary Actor Contribution (100% intensity)
-        if actor_u !== nothing && actor_v !== nothing
-            dist_sq = (actor_u - cu)^2 + (actor_v - cv)^2
-            activation += 1.0 * exp(-dist_sq / (2 * (0.15)^2))
-        end
-        
-        # Secondary Actor Contribution (40% lower-priority intensity)
-        if sec_u !== nothing && sec_v !== nothing
-            dist_sq2 = (sec_u - cu)^2 + (sec_v - cv)^2
-            activation += 0.4 * exp(-dist_sq2 / (2 * (0.15)^2))
-        end
-        
-        activations[idx] = min(1.15, activation) # Cap max brightness
-    end
-    
-    z_vals = zeros(length(v_vals), length(u_vals))
-    for (i, v) in enumerate(v_vals)
-        for (j, u) in enumerate(u_vals)
-            val = 0.0
-            for (idx, (cu, cv)) in enumerate(power_points)
-                val += activations[idx] * exp(-((u - cu)^2)/(2*sigma_u^2) - ((v - cv)^2)/(2*sigma_v^2))
-            end
-            z_vals[i, j] = val
-        end
-    end
-
-    # Keep levels absolute so the colors don't shifting dynamically
-    # Use a custom gradient starting with pure black
-    heatmap_grad = cgrad([:black, :darkred, :orange, :yellow, :white])
-    contourf!(p, u_vals, v_vals, z_vals, 
-              levels=range(0, 1.15, length=20), color=heatmap_grad, alpha=plot_alpha, linewidth=0, colorbar=false)
-end
-
-# ─────────────────────────────────────────────────────────────
 #  BUILD TRAJECTORIES & RUN MPC
 # ─────────────────────────────────────────────────────────────
 println("Building trajectories and running MPC (Dynamic Heatmap)...")
@@ -119,7 +67,7 @@ actor2_traj = lissajous_trajectory(mesh; num_steps=NUM_STEPS, init_position=A2_O
 all_actor_trajs = [actor1_traj, actor2_traj]
 primary_traj    = all_actor_trajs[PRIMARY_IDX]
 
-params = RobotParameters(HORIZON, TS, [-AX_MAX, -AX_MAX, -AZ_MAX, -ALPHA_MAX], [AX_MAX, AX_MAX, AZ_MAX, ALPHA_MAX], FOLLOW_DIST)
+params = RobotParameters(HORIZON, TS, [-AX_MAX, -AX_MAX, -AZ_MAX, -ALPHA_MAX], [AX_MAX, AX_MAX, AZ_MAX, ALPHA_MAX], FOLLOW_DIST, 1.5)
 
 current_pos = copy(DRONE_INIT)
 drone_trajectory = [copy(current_pos)]
@@ -141,6 +89,69 @@ println("Rendering animation...")
 
 vs = FPV_VIEW_SIZE
 num_frames = min(minimum(length.(all_actor_trajs)), length(drone_trajectory))
+
+# ─────────────────────────────────────────────────────────────
+#  DATA COLLECTION — Gaussian activation per frame
+# ─────────────────────────────────────────────────────────────
+println("Collecting activation data...")
+
+function compute_frame_activation(drone, primary_actor, sec_actor, vs)
+    rot_points = get_rule_of_thirds_points(vs)
+    sigma = 0.15
+
+    center_world = [primary_actor.x, primary_actor.y,
+                    primary_actor.z + primary_actor.mesh.height / 2.0]
+    cp, ok = project_to_fpv(center_world, drone; tilt_angle=FPV_TILT, focal_length=FPV_FOV)
+    actor_u, actor_v = ok ? (cp[1], cp[2]) : (nothing, nothing)
+
+    sec_center = [sec_actor.x, sec_actor.y,
+                  sec_actor.z + sec_actor.mesh.height / 2.0]
+    cp2, ok2 = project_to_fpv(sec_center, drone; tilt_angle=FPV_TILT, focal_length=FPV_FOV)
+    sec_u, sec_v = ok2 ? (cp2[1], cp2[2]) : (nothing, nothing)
+
+    primary_score = 0.0
+    secondary_score = 0.0
+    for (cu, cv) in rot_points
+        if actor_u !== nothing
+            d2 = (actor_u - cu)^2 + (actor_v - cv)^2
+            primary_score += exp(-d2 / (2 * sigma^2))
+        end
+        if sec_u !== nothing
+            d2 = (sec_u - cu)^2 + (sec_v - cv)^2
+            secondary_score += 0.4 * exp(-d2 / (2 * sigma^2))
+        end
+    end
+    return primary_score, secondary_score
+end
+
+activation_rows = []
+best_combined = -Inf
+best_frame    = 1
+
+for i in 1:num_frames
+    drone         = drone_trajectory[i]
+    primary_actor = all_actor_trajs[PRIMARY_IDX][i]
+    sec_actor     = all_actor_trajs[2][i]
+    p, s = compute_frame_activation(drone, primary_actor, sec_actor, vs)
+    combined = p + s
+    push!(activation_rows, (frame=i, primary=p, secondary=s, combined=combined))
+    if combined > best_combined
+        global best_combined = combined
+        global best_frame    = i
+    end
+end
+
+println("  Best frame: $best_frame  (combined activation = $(round(best_combined, digits=4)))")
+
+# Save CSV
+open("activation_data.csv", "w") do f
+    println(f, "frame,primary_activation,secondary_activation,combined_activation")
+    for r in activation_rows
+        println(f, "$(r.frame),$(r.primary),$(r.secondary),$(r.combined)")
+    end
+end
+println("  Saved activation time-series → activation_data.csv")
+
 
 anim = @animate for i in 1:num_frames
     drone = drone_trajectory[i]
@@ -169,7 +180,7 @@ anim = @animate for i in 1:num_frames
                        [a.y for a in traj][1:i], 
                        [a.z for a in traj][1:i], 
               linewidth=(a_idx == PRIMARY_IDX ? 3 : 2), 
-              color=col, alpha=0.6, label=(a_idx == PRIMARY_IDX ? "Primary Track" : "Actor Utils"))
+              color=col, alpha=0.6, label=(a_idx == PRIMARY_IDX ? "Primary Track" : "Actor 2"))
         world_verts = actor_world_vertices(actor.mesh, actor.x, actor.y, actor.z, actor.heading)
         draw_colored_actor!(p_world, actor, world_verts)
     end
@@ -220,8 +231,9 @@ anim = @animate for i in 1:num_frames
     cp2, ok2 = project_to_fpv(sec_center_world, drone; tilt_angle=FPV_TILT, focal_length=FPV_FOV)
     sec_u, sec_v = ok2 ? (cp2[1], cp2[2]) : (nothing, nothing)
 
-    # Draw pure heatmap (opaque so background is pure black)
-    draw_dynamic_heatmap!(p_heat, actor_u, actor_v, sec_u, sec_v; vs=vs, plot_alpha=1.0)
+    # Draw heatmap using all 4 Rule of Thirds power points
+    rot_points = get_rule_of_thirds_points(vs)
+    draw_dynamic_heatmap!(p_heat, actor_u, actor_v, sec_u, sec_v; power_points=rot_points, vs=vs, plot_alpha=1.0)
 
     for frac in (1/3, 2/3)
         xv = -vs + frac * (2*vs)
@@ -235,7 +247,14 @@ anim = @animate for i in 1:num_frames
         scatter!(p_heat, [cp[1]], [cp[2]], markersize=7, color=:white, markerstrokewidth=2, markerstrokecolor=:green, label="")
     end
 
-    plot(p_world, p_fpv, p_heat, layout=(1, 3), size=(2100, 700))
+    frame_plot = plot(p_world, p_fpv, p_heat, layout=(1, 3), size=(2100, 700))
+
+    if i == best_frame
+        savefig(frame_plot, "best_frame_$(best_frame).png")
+        println("Saved best frame $best_frame → best_frame_$(best_frame).png")
+    end
+
+    frame_plot
 end
 
 println("Saving $(OUTPUT_FILE)...")

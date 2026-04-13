@@ -24,7 +24,8 @@ struct RobotParameters
     Ts:: Float64    #Time step
     u_min::Vector{Float64}  # input lower bounds
     u_max::Vector{Float64}  # input upper bounds
-    target_distance::Float64   #Safety distance from the actor
+    target_distance::Float64   #Desired filming distance from the actor
+    safety_dist::Float64       #Minimum safe distance from the actor (< target_distance)
     #follow_angle::Float64 #Added this angle relative to actor's heading
  end
 
@@ -122,7 +123,7 @@ end
 
     model = Model(Ipopt.Optimizer)
     set_optimizer_attribute(model, "print_level", 0)
-    set_optimizer_attribute(model, "max_iter", 300)
+    set_optimizer_attribute(model, "max_iter", 500)
     set_optimizer_attribute(model, "tol", 1e-6)
 
     #Decision_Variables
@@ -217,7 +218,6 @@ end
 
         heading_error = cos(x[7,k]) * drone_to_actor_y - sin(x[7,k]) * drone_to_actor_x
         cost += heading_error^2
-        println("Cost: $(cost)")
 
         #println("  MPC cost: $(round(cost, digits=2))")
 
@@ -231,7 +231,6 @@ end
         camera_coverage =0.0 
         cumulative_coverage =0.0
         heading = [cos(x[7,k]),sin(x[7,k]),0.0]
-        print("Heading: $heading\n")
         for face in actor_state.mesh.faces
             
             face_pos = actor_world_face_center(actor_state.mesh, face, actor_state.x, actor_state.y, actor_state.z, actor_state.heading)
@@ -245,10 +244,6 @@ end
             ]
 
 
-            print("face_x: $face_x")
-
-            println("Distance: $distance")
-            
             cumulative_coverage += compute_camera_coverage(face,heading,distance)
 
             quality = face_view_quality(face,cumulative_coverage)
@@ -269,7 +264,28 @@ end
         angular_control_cost = u[4,k]^2
         cost += angular_control_cost
 
+        # Terminal cost — applied only at the last horizon step k == N
+        # Two one-sided penalties using smooth max(c, 0):
+        #   1. Drone too far  → actor exits camera frame
+        #   2. Drone too close → safety distance violation
+        # if k == N
+        #     for a_state in actor_position
+        #         dist_sq = (x[1, N+1] - a_state.x)^2 +
+        #                   (x[2, N+1] - a_state.y)^2 +
+        #                   (x[3, N+1] - a_state.z)^2
 
+        #         # Penalise when drone is farther than target_distance (actor exits frame)
+        #         c_far  = dist_sq - target_dist^2
+        #         cost  += (c_far + sqrt(c_far^2 + 1e-4)) / 2.0
+
+        #         # Penalise when drone is closer than safety_dist (collision risk)
+        #         c_near = RobotParameters.safety_dist^2 - dist_sq
+        #         cost  += (c_near + sqrt(c_near^2 + 1e-4)) / 2.0
+        #     end
+        # end
+
+
+        
 
     end
 
@@ -304,9 +320,10 @@ end
     """)
     #assert_is_solved_and_feasible(model)
     stat = termination_status(model)
-    if !(stat == MOI.OPTIMAL || stat == MOI.LOCALLY_SOLVED)
+    if !(stat == MOI.OPTIMAL || stat == MOI.LOCALLY_SOLVED || stat == MOI.ITERATION_LIMIT)
         error("MPC solver failed: $stat")
     end
+    stat == MOI.ITERATION_LIMIT && @warn "Solver hit iteration limit — using best feasible point"
     pos_opt = JuMP.value.(x)
     vel_opt = JuMP.value.(u)
     #println("pos_opt: $pos_opt")
@@ -359,8 +376,8 @@ function mpc_run_simulation(
     0.2,    #Time step
     [-1.0,-1.0,-az,-aomega],  #minimum control bounds: ax,ay,az,atheta
     [1.0,1.0,az, aomega],  #maximum control bounds: ax,ay,az,atheta
-    2.0  #Safety distance from the actor(ay*sin(theta) + ay*cos(theta))
-    #[2.5,2.5,0.0] #target position
+    2.0,  #Desired filming distance from the actor
+    1.0   #Minimum safe distance from the actor
     )
 
     #current_position = [2.0,3.5,0.0,0.0,0.0,0.0,0.0,0.0]
