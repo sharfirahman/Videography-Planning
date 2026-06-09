@@ -17,7 +17,7 @@ using .ActorTrajectory
 
 
 
-export RobotParameters,RobotDynamics, SafeTrajectory
+export RobotParameters, RobotDynamics, SafeTrajectory, SafeTrajectoryMultiActor, PlanTrajectory
 
 struct RobotParameters
     N::Int          #Finite Time Horizon
@@ -332,7 +332,169 @@ end
 
     return pos_opt, vel_opt
  end
-    
+
+
+# ─────────────────────────────────────────────────────────────
+# SafeTrajectoryMultiActor
+#   Keeps BOTH actors in frame simultaneously.
+#   Strategy:
+#     • Desired position = midpoint of actors + FOLLOW_DIST
+#       offset perpendicular to the actor-actor axis
+#     • Heading error = drone yaw minus direction to midpoint
+#     • Camera coverage reward = sum of PPA for both actors
+# ─────────────────────────────────────────────────────────────
+function SafeTrajectoryMultiActor(
+    x_current::Vector{Float64},
+    u_current::Vector{Float64},
+    RobotParameters::RobotParameters,
+    actor1_position::Vector{ActorState},
+    actor2_position::Vector{ActorState}
+)
+
+    N           = RobotParameters.N
+    states      = 8
+    control     = 4
+    target_dist = RobotParameters.target_distance
+
+    model = Model(Ipopt.Optimizer)
+    set_optimizer_attribute(model, "print_level", 0)
+    set_optimizer_attribute(model, "max_iter",    500)
+    set_optimizer_attribute(model, "tol",         1e-6)
+
+    @variable(model, x[1:states, 1:N+1])
+    @variable(model, u[1:control, 1:N])
+
+    @constraint(model, x[:, 1] == x_current)
+
+    phi_max = pi / 6
+    almax   = tan(phi_max) * g
+
+    for k in 1:N
+        @constraint(model, RobotParameters.u_min[1] <= u[1,k] <= RobotParameters.u_max[1])
+        @constraint(model, RobotParameters.u_min[2] <= u[2,k] <= RobotParameters.u_max[2])
+        @constraint(model, RobotParameters.u_min[3] <= u[3,k] <= RobotParameters.u_max[3])
+        @constraint(model, RobotParameters.u_min[4] <= u[4,k] <= RobotParameters.u_max[4])
+        @constraint(model, -almax <= (u[1,k])^2 + (u[2,k])^2 <= almax)
+
+        # Dynamics
+        @constraint(model, x[4,k+1] == x[4,k] + (u[1,k]*cos(x[7,k]) - u[2,k]*sin(x[7,k])) * RobotParameters.Ts)
+        @constraint(model, x[5,k+1] == x[5,k] + (u[1,k]*sin(x[7,k]) + u[2,k]*cos(x[7,k])) * RobotParameters.Ts)
+        @constraint(model, x[6,k+1] == x[6,k] + u[3,k] * RobotParameters.Ts)
+        @constraint(model, x[1,k+1] == x[1,k] + RobotParameters.Ts * x[4,k])
+        @constraint(model, x[2,k+1] == x[2,k] + RobotParameters.Ts * x[5,k])
+        @constraint(model, x[3,k+1] == x[3,k] + RobotParameters.Ts * x[6,k])
+        @constraint(model, x[8,k+1] == x[8,k] + RobotParameters.Ts * u[4,k])
+        @constraint(model, x[7,k+1] == x[7,k] + RobotParameters.Ts * x[8,k])
+    end
+
+    cost = 0.0
+
+    for k in 1:N
+        a1 = actor1_position[min(k, length(actor1_position))]
+        a2 = actor2_position[min(k, length(actor2_position))]
+
+        cx1, cy1 = a1.x, a1.y
+        cx2, cy2 = a2.x, a2.y
+
+        # ── Midpoint between the two actors ──────────────────────
+        mx = (cx1 + cx2) / 2.0
+        my = (cy1 + cy2) / 2.0
+
+        # ── Perpendicular offset to actor-actor axis ─────────────
+        #   actor1→actor2 unit vector: (dx, dy)
+        #   perpendicular (left-hand normal): (-dy, dx)
+        dx = cx2 - cx1
+        dy = cy2 - cy1
+        sep = sqrt(dx^2 + dy^2 + 1e-6)   # smooth for Ipopt
+        perp_x = -dy / sep
+        perp_y =  dx / sep
+
+        desired_x = mx + target_dist * perp_x
+        desired_y = my + target_dist * perp_y
+        desired_z = 2.0
+
+        # ── Position error toward midpoint offset ─────────────────
+        err_x = x[1,k] - desired_x
+        err_y = x[2,k] - desired_y
+        err_z = x[3,k] - desired_z
+        cost += err_x^2 + err_y^2 + err_z^2
+
+        # ── Heading: point camera at midpoint ────────────────────
+        drone_to_mid_x = mx - x[1,k]
+        drone_to_mid_y = my - x[2,k]
+        heading_error  = cos(x[7,k]) * drone_to_mid_y - sin(x[7,k]) * drone_to_mid_x
+        cost += heading_error^2
+
+        # ── Camera coverage: sum over both actors ─────────────────
+        heading_vec = [cos(x[7,k]), sin(x[7,k]), 0.0]
+        for actor_state in (a1, a2)
+            camera_coverage    = 0.0
+            cumulative_coverage = 0.0
+            for face in actor_state.mesh.faces
+                face_pos = actor_world_face_center(
+                    actor_state.mesh, face,
+                    actor_state.x, actor_state.y, actor_state.z,
+                    actor_state.heading)
+                distance = [
+                    face_pos[1] - x[1,k],
+                    face_pos[2] - x[2,k],
+                    face_pos[3] - x[3,k]
+                ]
+                cumulative_coverage += compute_camera_coverage(face, heading_vec, distance)
+                quality              = face_view_quality(face, cumulative_coverage)
+                camera_coverage     += quality
+            end
+            cost -= camera_coverage^2
+        end
+
+        # ── Control cost ─────────────────────────────────────────
+        cost += u[1,k]^2 + u[2,k]^2 + u[3,k]^2 + u[4,k]^2
+    end
+
+    @objective(model, Min, cost)
+    optimize!(model)
+
+    println("""
+    termination_status = $(termination_status(model))
+    primal_status      = $(primal_status(model))
+    objective_value    = $(objective_value(model))
+    """)
+
+    stat = termination_status(model)
+    if !(stat == MOI.OPTIMAL || stat == MOI.LOCALLY_SOLVED || stat == MOI.ITERATION_LIMIT)
+        error("SafeTrajectoryMultiActor solver failed: $stat")
+    end
+    stat == MOI.ITERATION_LIMIT && @warn "Solver hit iteration limit — using best feasible point"
+
+    return JuMP.value.(x), JuMP.value.(u)
+end
+
+
+# ─────────────────────────────────────────────────────────────
+# PlanTrajectory  — unified dispatcher
+#
+#   Pass 1 actor  → SafeTrajectory  (single-actor tracking)
+#   Pass 2 actors → SafeTrajectoryMultiActor (both actors in frame)
+#
+#   Usage:
+#     PlanTrajectory(x, u, params, [actor1_horizon])           # single
+#     PlanTrajectory(x, u, params, [actor1_horizon, actor2_horizon])  # multi
+# ─────────────────────────────────────────────────────────────
+function PlanTrajectory(
+    x_current::Vector{Float64},
+    u_current::Vector{Float64},
+    params::RobotParameters,
+    actors::Vector{Vector{ActorState}}
+)
+    if length(actors) == 1
+        return SafeTrajectory(x_current, u_current, params, actors[1])
+    elseif length(actors) == 2
+        return SafeTrajectoryMultiActor(x_current, u_current, params, actors[1], actors[2])
+    else
+        error("PlanTrajectory: unsupported number of actors ($(length(actors))). Pass 1 or 2.")
+    end
+end
+
     # function determine_phase(current_pos, target_pos, safe_distance, time_in_circle)
     #     """Determine whether robot should be approaching or circling"""
     #     distance_to_target = norm(current_pos[1:2] - target_pos[1:2])  
