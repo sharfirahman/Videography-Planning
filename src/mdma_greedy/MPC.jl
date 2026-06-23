@@ -156,7 +156,7 @@ end
 
         @constraint(model, -almax <=((u[1,k])^2 + (u[2,k])^2)<=almax)
         #@constraint(model, ((u[1,k])^2 + (u[2,k])^2)<=almax^2)
-        Vector{Float64}
+        #Vector{Float64}
         #World frame rotation -for velocity
         @constraint(model, x[4,k+1] == x[4,k] + (u[1,k]*cos(x[7,k]) -u[2,k]*sin(x[7,k])) * RobotParameters.Ts) 
         @constraint(model, x[5,k+1] == x[5,k] + (u[1,k]*sin(x[7,k]) +u[2,k]*cos(x[7,k])) * RobotParameters.Ts)
