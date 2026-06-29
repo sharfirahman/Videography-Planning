@@ -17,7 +17,7 @@ using Profile
 
 const NUM_STEPS       = 200
 const PRIMARY_IDX     = 1        # actor the drone tracks
-const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_fpv.gif\"
+const OUTPUT_FILE     = "drone_experiments/multi_actor_fpv.gif"
 const FPS             = 12
 
 # Actor geometry (shared mesh for both)
@@ -95,7 +95,8 @@ params = RobotParameters(
     TS,
     [-AX_MAX, -AX_MAX, -AZ_MAX, -ALPHA_MAX],
     [ AX_MAX,  AX_MAX,  AZ_MAX,  ALPHA_MAX],
-    FOLLOW_DIST
+    FOLLOW_DIST,
+    1.0   # safety_dist
 )
 
 primary_traj    = all_actor_trajs[PRIMARY_IDX]

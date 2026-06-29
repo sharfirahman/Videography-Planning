@@ -18,6 +18,7 @@ using .ActorTrajectory
 
 
 export RobotParameters, RobotDynamics, SafeTrajectory, SafeTrajectoryMultiActor, PlanTrajectory
+export pinhole_ppa_reward
 
 struct RobotParameters
     N::Int          #Finite Time Horizon
@@ -106,6 +107,39 @@ function face_view_quality(face::ActorFace, coverage_value)
     face.weight * face.area * sqrt(coverage_value + 1e-6)
 end
 
+
+function pinhole_ppa_reward(
+    face::ActorFace,
+    face_pos::Vector{Float64},  # world-frame face center (precomputed constant)
+    n_world::Vector{Float64},   # world-frame face normal (precomputed constant)
+    drone_x, drone_y, drone_z, drone_yaw;  # JuMP variables or plain Float64
+    focal_length::Float64 = 1.2,
+    tilt::Float64         = -0.35          # camera tilt (matches FPV_TILT)
+)
+    dx = face_pos[1] - drone_x
+    dy = face_pos[2] - drone_y
+    dz = face_pos[3] - drone_z
+
+    # ─ Option A: optical-axis depth cx (yaw + tilt rotation) ───────────────
+    bx = dx*cos(drone_yaw) + dy*sin(drone_yaw)  # body-frame forward depth
+    cx = bx*cos(tilt)      + dz*sin(tilt)        # camera optical-axis depth
+    cx_sq = cx^2 + 1e-6                          # ε guards against cx ≈ 0
+
+    # Full distance d — still needed for cos(θ) = n_dot / d
+    d = sqrt(dx^2 + dy^2 + dz^2 + 1e-6)
+
+    # dot(n_world, -d_vec): positive when the face is pointing toward the drone
+    n_dot = -(n_world[1]*dx + n_world[2]*dy + n_world[3]*dz)
+
+    # Differentiable smooth max(0, n_dot) — needed for Ipopt gradient computation
+    smooth_vis = (n_dot + sqrt(n_dot^2 + 1e-4)) / 2
+
+    # PPA = face_area × cos(θ) × (f/cx)²
+    #      = face_area × (smooth_vis/d) × f²/cx²
+    #      = face_area × f² × smooth_vis / (d × cx²)
+    return face.area * focal_length^2 * smooth_vis / (d * cx_sq)
+end
+
  function SafeTrajectory(x_current::Vector{Float64},
                         u_current::Vector{Float64},
                         RobotParameters::RobotParameters,
@@ -154,8 +188,8 @@ end
         @constraint(model, RobotParameters.u_min[3]<=u[3,k]<=RobotParameters.u_max[3])
         @constraint(model, RobotParameters.u_min[4]<=u[4,k]<=RobotParameters.u_max[4])
 
-        @constraint(model, -almax <=((u[1,k])^2 + (u[2,k])^2)<=almax)
-        #@constraint(model, ((u[1,k])^2 + (u[2,k])^2)<=almax^2)
+        #@constraint(model, -almax <=((u[1,k])^2 + (u[2,k])^2)<=almax)
+        @constraint(model, ((u[1,k])^2 + (u[2,k])^2)<=almax^2)
         #Vector{Float64}
         #World frame rotation -for velocity
         @constraint(model, x[4,k+1] == x[4,k] + (u[1,k]*cos(x[7,k]) -u[2,k]*sin(x[7,k])) * RobotParameters.Ts) 
@@ -205,7 +239,7 @@ end
         error_position_z = x[3,k]-desired_z
 
 
-        #approaching and staying on the circle cost -Circular cost
+        #approaching and staying to a target distance from the actor
         distance_from_circle = error_position_x^2 + error_position_y^2 +error_position_z^2
         cost += distance_from_circle 
 
@@ -226,33 +260,19 @@ end
         
         
 
-        #Adding the reward 
-        
-        camera_coverage =0.0 
-        cumulative_coverage =0.0
-        heading = [cos(x[7,k]),sin(x[7,k]),0.0]
+        # ── Camera coverage: pinhole PPA reward ──────────────────────────────
+        # Replaces the old compute_camera_coverage proxy (1/d⁴ falloff) with
+        # the physically correct pinhole formula: face_area × cos(θ) × (f/d)².
+        ppa_reward = 0.0
         for face in actor_state.mesh.faces
-            
-            face_pos = actor_world_face_center(actor_state.mesh, face, actor_state.x, actor_state.y, actor_state.z, actor_state.heading)
-            face_x,face_y,face_z = face_pos[1],face_pos[2],face_pos[3]
-            #Need to calculate the face center in the world frame
-
-            distance = [
-            face_x - x[1,k],
-            face_y - x[2,k],
-            face_z - x[3,k]
-            ]
-
-
-            cumulative_coverage += compute_camera_coverage(face,heading,distance)
-
-            quality = face_view_quality(face,cumulative_coverage)
-
-            camera_coverage += quality 
-
-
+            face_pos = actor_world_face_center(actor_state.mesh, face,
+                           actor_state.x, actor_state.y, actor_state.z,
+                           actor_state.heading)
+            n_world  = actor_world_normal(face, actor_state.heading)
+            ppa_reward += face.weight * pinhole_ppa_reward(
+                              face, face_pos, n_world, x[1,k], x[2,k], x[3,k], x[7,k])
         end
-        cost -= camera_coverage^2
+        cost -= ppa_reward
 
         #control cost
         ax_control_cost = (u[1,k])^2 
@@ -425,26 +445,18 @@ function SafeTrajectoryMultiActor(
         heading_error  = cos(x[7,k]) * drone_to_mid_y - sin(x[7,k]) * drone_to_mid_x
         cost += heading_error^2
 
-        # ── Camera coverage: sum over both actors ─────────────────
-        heading_vec = [cos(x[7,k]), sin(x[7,k]), 0.0]
+        # ── Camera coverage: pinhole PPA reward for both actors ──────────────
         for actor_state in (a1, a2)
-            camera_coverage    = 0.0
-            cumulative_coverage = 0.0
+            ppa_reward = 0.0
             for face in actor_state.mesh.faces
-                face_pos = actor_world_face_center(
-                    actor_state.mesh, face,
-                    actor_state.x, actor_state.y, actor_state.z,
-                    actor_state.heading)
-                distance = [
-                    face_pos[1] - x[1,k],
-                    face_pos[2] - x[2,k],
-                    face_pos[3] - x[3,k]
-                ]
-                cumulative_coverage += compute_camera_coverage(face, heading_vec, distance)
-                quality              = face_view_quality(face, cumulative_coverage)
-                camera_coverage     += quality
+                face_pos = actor_world_face_center(actor_state.mesh, face,
+                               actor_state.x, actor_state.y, actor_state.z,
+                               actor_state.heading)
+                n_world  = actor_world_normal(face, actor_state.heading)
+                ppa_reward += face.weight * pinhole_ppa_reward(
+                                  face, face_pos, n_world, x[1,k], x[2,k], x[3,k], x[7,k])
             end
-            cost -= camera_coverage^2
+            cost -= ppa_reward
         end
 
         # ── Control cost ─────────────────────────────────────────

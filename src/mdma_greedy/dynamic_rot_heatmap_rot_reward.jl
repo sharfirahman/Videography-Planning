@@ -298,10 +298,6 @@ function compute_ppa(drone_state, actor_state)
         # Face normal rotated into world frame (actor heading applied)
         n_world   = actor_world_normal(face, actor_state.heading)
 
-        # cos(θ): positive → face is pointing toward the drone (visible)
-        #         negative → face points away (back-face cull, contributes zero)
-        # This is the correct visibility gate — no need for a frustum check because
-        # a back-facing face already produces cos_theta ≤ 0.
         cos_theta  = dot(n_world, -d_hat)
         visibility = max(0.0, cos_theta)
 
