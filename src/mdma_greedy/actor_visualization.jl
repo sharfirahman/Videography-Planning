@@ -60,17 +60,9 @@ function plot_actor_mesh()
     # Static image
     fig = Figure(size=(800, 600))
     make_frame!(fig, mesh, world_verts, π/4, el)
-    println("Saving static image to actor_3d_static.png...")
-    save("actor_3d_static.png", fig)
+    println("Saving static image to drone_experiments/actor_3d_static.png...")
+    save("./src/mdma_greedy/drone_experiments/actor_3d_static.png", fig)
 
-    # Rotating MP4 with per-frame back-face culling (MP4 preserves full color, GIF doesn't)
-    println("Saving rotation animation to actor_3d_circle.mp4...")
-    fig2 = Figure(size=(800, 600))
-    record(fig2, "actor_3d_circle.mp4", range(0, 2π, length=72); framerate=15) do az
-        make_frame!(fig2, mesh, world_verts, az, el)
-    end
-
-    println("✓ Done!")
 end
 
 plot_actor_mesh()

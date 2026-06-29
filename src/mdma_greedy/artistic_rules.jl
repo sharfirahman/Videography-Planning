@@ -1,3 +1,6 @@
+#Contains function to get the grid locations for different artictic framing rules.
+
+
 module ArtisticRules
 
 using Plots
@@ -29,28 +32,6 @@ function get_center_points(vs::Float64, aspect_ratio::Float64=0.72)
     ]
 end
 
-"""
-    get_top_right_rot_point(vs, aspect_ratio)
-
-Returns FPV coordinate for the top-right Rule of Thirds power point.
-In FPV coords (u right, v up): top-right = (+vs/3, -vs·aspect/3).
-"""
-function get_top_right_rot_point(vs::Float64, aspect_ratio::Float64=0.72)
-    return [
-        ( vs/3.0, -vs*aspect_ratio/3.0)
-    ]
-end
-
-"""
-    get_bottom_right_rot_point(vs, aspect_ratio)
-
-Returns FPV coordinate for the bottom-right Rule of Thirds power point.
-"""
-function get_bottom_right_rot_point(vs::Float64, aspect_ratio::Float64=0.72)
-    return [
-        ( vs/3.0,  vs*aspect_ratio/3.0)
-    ]
-end
 
 """
     draw_dynamic_heatmap!(p, actor_u, actor_v, sec_u, sec_v; power_points, vs, aspect_ratio, plot_alpha)

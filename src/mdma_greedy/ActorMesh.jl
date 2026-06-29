@@ -1,3 +1,6 @@
+#Contains code for defining actor mesh (the shape and position of actor in 3D space).
+
+
 module ActorMesh
 
 using LinearAlgebra

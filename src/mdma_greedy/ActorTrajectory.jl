@@ -1,3 +1,6 @@
+#Contains functions to generate different trajectories for the actor.
+
+
 module ActorTrajectory
 #using ..ActorMesh:ActorMeshStruct, build_actor_mesh,actor_world_vertices, actor_world_face_center, actor_world_normal
 using ..ActorMesh
