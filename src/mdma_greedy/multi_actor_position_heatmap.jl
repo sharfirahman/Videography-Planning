@@ -7,13 +7,12 @@ ENV["GKSwstype"] = "100"
 
 # Note: We don't use the MPC module wrapper here because SafeTrajectory 
 # and RobotDynamics actively solve using JuMP from the real MPC.jl
-include("./MPC.jl")
-include("./DroneVisualizationFPV.jl")
+
 
 using .MPC
-using .MPC.ActorMesh
-using .MPC.ActorTrajectory
-using .DroneVisualizationFPV
+using ..ActorMesh
+using ..ActorTrajectory
+using ..DroneVisualizationFPV
 using Plots
 using LinearAlgebra
 
@@ -23,7 +22,7 @@ using LinearAlgebra
 
 const NUM_STEPS       = 200
 const PRIMARY_IDX     = 1        # actor the drone tracks
-const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_position_heatmap.gif\"
+const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_position_heatmap.gif"
 const FPS             = 12
 
 const ACTOR_WIDTH     = 0.5

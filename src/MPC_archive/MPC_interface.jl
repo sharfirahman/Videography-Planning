@@ -6,14 +6,14 @@
 # using .MDMA
 ENV["GKSwstype"] = "100"
 
-include("./MPC.jl")
-include("./DroneVisualizationFPV.jl")
 
 
 using .MPC
-using .MPC.ActorMesh
-using .MPC.ActorTrajectory
-using .DroneVisualizationFPV
+using ..ActorMesh
+using ..ActorTrajectory
+using ..DroneVisualizationFPV
+
+
 
 function run_drone_actor_simulation(;
     num_steps::Int = 200,
@@ -57,7 +57,7 @@ function run_drone_actor_simulation(;
         [-ax_max, -ax_max, -az_max, -alpha_max],   # Min control
         [ax_max, ax_max, az_max, alpha_max],        # Max control
         follow_distance,                             # Follow distance
-        #follow_angle                                 # Follow angle
+        1.0                                 # Follow angle
     )
     
     println("  • Horizon: $(params.N) steps")

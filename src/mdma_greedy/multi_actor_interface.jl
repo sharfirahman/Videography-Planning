@@ -5,13 +5,12 @@
 
 ENV["GKSwstype"] = "100"
 
-include("./MPC.jl")
-include("./DroneVisualizationFPV.jl")
+
 
 using .MPC
-using .MPC.ActorMesh
-using .MPC.ActorTrajectory
-using .DroneVisualizationFPV
+using ..ActorMesh
+using ..ActorTrajectory
+using ..DroneVisualizationFPV
 using Profile
 
 

@@ -3,16 +3,15 @@ module MPC
 
 const g = 9.81
 
-include("./ActorMesh.jl")
-include("./ActorTrajectory.jl")
 
 using LinearAlgebra
 using Profile
 using Ipopt
 using JuMP 
 using Plots
-using .ActorMesh
-using .ActorTrajectory
+using ..ActorMesh
+using ..ActorTrajectory
+
 
 
 

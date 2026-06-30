@@ -7,13 +7,11 @@
 
 ENV["GKSwstype"] = "100"
 
-include("./MPC.jl")
-include("./DroneVisualizationFPV.jl")
 
 using .MPC
-using .MPC.ActorMesh
-using .MPC.ActorTrajectory
-using .DroneVisualizationFPV
+using ..ActorMesh
+using ..ActorTrajectory
+using ..DroneVisualizationFPV
 
 # ─── configuration ────────────────────────────────────────────────────────────
 const NUM_STEPS       = 200
@@ -37,7 +35,8 @@ const A2_RADIUS       = 4.5
 const A2_ANG_VEL      = 2π / 25.0
 const A2_START_ANGLE  = π
 const A2_ORIGIN       = [4.0, 4.0, 0.0]
-const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_fpv_circular.gif\"
+const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_fpv_circular.gif"
+
 
 # MPC parameters
 const HORIZON         = 10

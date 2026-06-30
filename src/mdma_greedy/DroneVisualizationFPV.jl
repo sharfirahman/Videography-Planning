@@ -5,7 +5,7 @@ module DroneVisualizationFPV
 
 using Plots
 using LinearAlgebra
-using ..MPC.ActorMesh: actor_world_vertices, actor_world_face_center, actor_world_normal
+using ..ActorMesh: actor_world_vertices, actor_world_face_center, actor_world_normal
 
 export draw_quadcopter!, animate_drone_and_actor, animate_multi_actor,
        draw_colored_actor!, draw_fpv_panel!, project_to_fpv

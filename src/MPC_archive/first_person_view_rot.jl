@@ -9,21 +9,25 @@ ENV["GKSwstype"] = "100"
 # ── Minimal "MPC" wrapper — includes only the mesh/trajectory sub-modules,
 #    no JuMP/Ipopt.  DroneVisualizationFPV uses "..MPC.ActorMesh" so it needs
 #    a parent module named MPC in scope.
-module MPC
-    include("ActorMesh.jl")
-    include("ActorTrajectory.jl")
-    using .ActorMesh
-    using .ActorTrajectory
-end
+# module MPC
 
-include("DroneVisualizationFPV.jl")
+#     using ActorMesh
+#     using ActorTrajectory
+# end
+
+#include("DroneVisualizationFPV.jl")
 
 using .MPC
-using .MPC.ActorMesh
-using .MPC.ActorTrajectory
-using .DroneVisualizationFPV
+using ..ActorMesh
+using ..ActorTrajectory
+using ..DroneVisualizationFPV
 using Plots
 using LinearAlgebra
+
+
+
+
+
 
 # ─────────────────────────────────────────────────────────────
 #  CONFIGURATION  (identical to first_person_view.jl)
@@ -55,7 +59,7 @@ const FPV_TILT      = -0.35
 const FPV_FOV       =  1.2
 const FPV_VIEW_SIZE =  0.68
 
-const OUTPUT_FILE   = "src/mdma_greedy/drone_experiments/drone_follows_actor_fpv_rot.gif\"
+const OUTPUT_FILE   = "src/mdma_greedy/drone_experiments/drone_follows_actor_fpv_rot.gif"
 const FPS           = 12
 const WORLD_XLIMS   = (-6.0,  6.0)
 const WORLD_YLIMS   = (-6.0,  6.0)
