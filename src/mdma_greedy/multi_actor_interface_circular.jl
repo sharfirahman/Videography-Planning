@@ -16,7 +16,7 @@ using ..DroneVisualizationFPV
 # ─── configuration ────────────────────────────────────────────────────────────
 const NUM_STEPS       = 200
 const PRIMARY_IDX     = 1        # actor the drone tracks
-const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_fpv_circular.gif\"
+const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_fpv_circular.gif"
 const FPS             = 12
 
 # Actor geometry (shared mesh for both)
@@ -33,9 +33,10 @@ const A1_ORIGIN       = [0.0, 0.0, 0.0]
 # Actor 2 (Circle, starting far from origin)
 const A2_RADIUS       = 4.5
 const A2_ANG_VEL      = 2π / 25.0
-const A2_START_ANGLE  = π
+const A2_START_ANGLE  = 3.14
 const A2_ORIGIN       = [4.0, 4.0, 0.0]
-const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_fpv_circular.gif"
+#const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/multi_actor_fpv_circular.gif"
+
 
 
 # MPC parameters
@@ -92,8 +93,10 @@ params = RobotParameters(
     TS,
     [-AX_MAX, -AX_MAX, -AZ_MAX, -ALPHA_MAX],
     [ AX_MAX,  AX_MAX,  AZ_MAX,  ALPHA_MAX],
-    FOLLOW_DIST
+    FOLLOW_DIST,
+    1.0
 )
+
 
 primary_traj    = all_actor_trajs[PRIMARY_IDX]
 current_pos     = copy(DRONE_INIT)

@@ -122,7 +122,7 @@ function pinhole_ppa_reward(
     # ─ Option A: optical-axis depth cx (yaw + tilt rotation) ───────────────
     bx = dx*cos(drone_yaw) + dy*sin(drone_yaw)  # body-frame forward depth
     cx = bx*cos(tilt)      + dz*sin(tilt)        # camera optical-axis depth
-    cx_sq = cx^2 + 1e-6                          # ε guards against cx ≈ 0
+    cx_sq = cx^2 + 1.0                           # LARGE epsilon (1.0) to prevent infinite reward spike when depth -> 0
 
     # Full distance d — still needed for cos(θ) = n_dot / d
     d = sqrt(dx^2 + dy^2 + dz^2 + 1e-6)
@@ -188,7 +188,7 @@ end
         @constraint(model, RobotParameters.u_min[4]<=u[4,k]<=RobotParameters.u_max[4])
 
         #@constraint(model, -almax <=((u[1,k])^2 + (u[2,k])^2)<=almax)
-        @constraint(model, ((u[1,k])^2 + (u[2,k])^2)<=almax^2)
+        #@constraint(model, ((u[1,k])^2 + (u[2,k])^2)<=almax^2)
         #Vector{Float64}
         #World frame rotation -for velocity
         @constraint(model, x[4,k+1] == x[4,k] + (u[1,k]*cos(x[7,k]) -u[2,k]*sin(x[7,k])) * RobotParameters.Ts) 
@@ -260,8 +260,6 @@ end
         
 
         # ── Camera coverage: pinhole PPA reward ──────────────────────────────
-        # Replaces the old compute_camera_coverage proxy (1/d⁴ falloff) with
-        # the physically correct pinhole formula: face_area × cos(θ) × (f/d)².
         ppa_reward = 0.0
         for face in actor_state.mesh.faces
             face_pos = actor_world_face_center(actor_state.mesh, face,

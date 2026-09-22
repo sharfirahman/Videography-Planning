@@ -7,8 +7,7 @@ using LinearAlgebra
 using Ipopt
 using JuMP 
 using Plots
-using POMDPs
-using POMDPTools
+
 
 
 export RobotParameters

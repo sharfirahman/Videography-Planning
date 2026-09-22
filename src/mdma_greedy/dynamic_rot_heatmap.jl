@@ -5,14 +5,12 @@
 
 ENV["GKSwstype"] = "100"
 
-include("./MPC.jl")
-include("./DroneVisualizationFPV.jl")
-include("./artistic_rules.jl")
+
 
 using .MPC
-using .MPC.ActorMesh
-using .MPC.ActorTrajectory
-using .DroneVisualizationFPV
+using ..ActorMesh
+using ..ActorTrajectory
+using ..DroneVisualizationFPV
 using .ArtisticRules
 using Plots
 using LinearAlgebra
@@ -24,7 +22,7 @@ using LinearAlgebra
 const NUM_STEPS       = 200
 const PRIMARY_IDX     = 1
 const FPS             = 12
-const OUTPUT_FILE     = "dynamic_rot_heatmap_2.gif"
+const OUTPUT_FILE     = "src/mdma_greedy/drone_experiments/dynamic_rot_heatmap_2.gif"
 
 const ACTOR_WIDTH     = 0.5
 const ACTOR_DEPTH     = 0.3
@@ -72,7 +70,11 @@ params = RobotParameters(HORIZON, TS, [-AX_MAX, -AX_MAX, -AZ_MAX, -ALPHA_MAX], [
 current_pos = copy(DRONE_INIT)
 drone_trajectory = [copy(current_pos)]
 
+
+
 for step in 1:(length(primary_traj) - 1)
+    println("Step: $step")
+ 
     global current_pos
     horizon_end   = min(step + params.N - 1, length(primary_traj))
     actor_horizon = primary_traj[step:horizon_end]
@@ -250,8 +252,8 @@ anim = @animate for i in 1:num_frames
     frame_plot = plot(p_world, p_fpv, p_heat, layout=(1, 3), size=(2100, 700))
 
     if i == best_frame
-        savefig(frame_plot, "best_frame_$(best_frame).png")
-        println("Saved best frame $best_frame → best_frame_$(best_frame).png")
+        savefig(frame_plot, "src/mdma_greedy/drone_experiments/best_frame_$(best_frame).png")
+        println("Saved best frame $best_frame → src/mdma_greedy/drone_experiments/best_frame_$(best_frame).png")
     end
 
     frame_plot
