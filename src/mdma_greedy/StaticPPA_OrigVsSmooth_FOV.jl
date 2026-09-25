@@ -19,8 +19,8 @@ using Plots
 using LinearAlgebra
 using Base.Iterators
 
-const OBJ_PATH = joinpath(@__DIR__, "simple_human_rotated_color.obj")
-const PART_DECAY = Dict(:Head_face => 2.0, :Body_face => 1.0, :Feet_face => 0.5, :Top_face => 1.5)
+const OBJ_PATH = joinpath(@__DIR__, "simple_human_rotated_xaxis.obj")
+const PART_DECAY = Dict(:Head_face => 1.0, :Body_face => 0.75, :Feet_face => 0.5, :Top_face => 1.5)
 
 # Local stand-in for ActorTrajectory's ActorState, typed to the triangulated
 # mesh instead of the box ActorMeshStruct.
@@ -58,14 +58,14 @@ function ppa_coverage_original_static(
     drone_yaw::Float64
 )
     alpha = 1
-    dist    = face_pos .- drone_pos
-    d4      = norm(dist)^4
+    dist = face_pos .- drone_pos
+    d4 = norm(dist)^4
     d4 < 1e-6 && return 0.0
     heading = [cos(drone_yaw), sin(drone_yaw), 0.0]
 
     pixel_density = alpha * abs(dot(dist, heading)) *
-           (-dot(dist, n_world))  *
-           isvisible_hard_static(dist, n_world) / d4
+                    (-dot(dist, n_world)) *
+                    isvisible_hard_static(dist, n_world) / d4
 
     return pixel_density
 end
@@ -80,37 +80,39 @@ function ppa_coverage_smooth_static(
     world_verts::Vector,
     drone::Vector{Float64},
     n_world::Vector{Float64};
-    focal_length::Float64 = 1.2,
-    tilt::Float64         = -0.35,
-    debug::Bool           = false
+    focal_length::Float64=1.2,
+    tilt::Float64=-0.35,
+    debug::Bool=false
 )
     yaw = drone[7]
-    uv  = Vector{Vector{Float64}}()
-    w   = 1.0
+    uv = Vector{Vector{Float64}}()
+    w = 1.0
 
     # ── Self-Occlusion Check ──────────────────────────────────────────────────
     face_pos = sum(world_verts[idx] for idx in face.corner_indices) / length(face.corner_indices)
-    dist     = face_pos .- drone[1:3]
-    n_dot    = -dot(n_world, dist)
+    dist = face_pos .- drone[1:3]
+    n_dot = -dot(n_world, dist)
 
     is_occluded = n_dot <= 0.0
 
     visible_vertices = 0
 
     for idx in face.corner_indices
-        v  = world_verts[idx]
-        dx = v[1] - drone[1];  dy = v[2] - drone[2];  dz = v[3] - drone[3]
-        bx =  dx * cos(yaw) + dy * sin(yaw)
+        v = world_verts[idx]
+        dx = v[1] - drone[1]
+        dy = v[2] - drone[2]
+        dz = v[3] - drone[3]
+        bx = dx * cos(yaw) + dy * sin(yaw)
         by = -dx * sin(yaw) + dy * cos(yaw)
-        cx_raw =  bx * cos(tilt) + dz * sin(tilt)
-        cy     =  by
+        cx_raw = bx * cos(tilt) + dz * sin(tilt)
+        cy = by
         cz_raw = -bx * sin(tilt) + dz * cos(tilt)
 
         cx_soft = (cx_raw + sqrt(cx_raw^2 + 1e-4)) / 2.0
         w *= cx_soft / (cx_soft + 0.1)
 
         cx_denom = max(cx_raw, 0.1)
-        u  = focal_length * cy     / cx_denom
+        u = focal_length * cy / cx_denom
         v_ = focal_length * cz_raw / cx_denom
         push!(uv, [u, v_])
 
@@ -154,9 +156,9 @@ end
 function eval_ppa_static(
     actor::TriActorState,
     drone::Vector{Float64};
-    focal_length::Float64 = 1.2,
-    tilt::Float64         = -0.35,
-    debug::Bool           = false
+    focal_length::Float64=1.2,
+    tilt::Float64=-0.35,
+    debug::Bool=false
 )
     drone_pos = drone[1:3]
     drone_yaw = drone[7]
@@ -168,14 +170,14 @@ function eval_ppa_static(
     # 1. Target Detection (Actor Center)
     actor_cx = actor.x - drone_pos[1]
     actor_cy = actor.y - drone_pos[2]
-    actor_cz = (actor.z + actor.mesh.height/2) - drone_pos[3] # Approximate center height
+    actor_cz = (actor.z + actor.mesh.height / 2) - drone_pos[3] # Approximate center height
 
     # Transform center to camera local frame
-    bx_center =  actor_cx * cos(drone_yaw) + actor_cy * sin(drone_yaw)
+    bx_center = actor_cx * cos(drone_yaw) + actor_cy * sin(drone_yaw)
     by_center = -actor_cx * sin(drone_yaw) + actor_cy * cos(drone_yaw)
 
-    cx_raw_center =  bx_center * cos(tilt) + actor_cz * sin(tilt)
-    cy_center     =  by_center
+    cx_raw_center = bx_center * cos(tilt) + actor_cz * sin(tilt)
+    cy_center = by_center
     cz_raw_center = -bx_center * sin(tilt) + actor_cz * cos(tilt)
 
     u_center = focal_length * cy_center / max(cx_raw_center, 0.1)
@@ -186,11 +188,11 @@ function eval_ppa_static(
 
     if target_detected
         for face in actor.mesh.faces
-            face_pos  = ActorMeshTriangulated.actor_world_face_center(actor.mesh, face, actor.x, actor.y, actor.z, actor.heading)
-            n_world   = ActorMeshTriangulated.actor_world_normal(face, actor.heading)
-            weight    = ActorMeshTriangulated.face_dynamic_weight(face, actor.heading, actor_pos, drone_pos[1:2])
-            cov_o     = ppa_coverage_original_static(face, face_pos, n_world, drone_pos, drone_yaw)
-            po       += ppa_quality_original_static(face, cov_o, weight)
+            face_pos = ActorMeshTriangulated.actor_world_face_center(actor.mesh, face, actor.x, actor.y, actor.z, actor.heading)
+            n_world = ActorMeshTriangulated.actor_world_normal(face, actor.heading)
+            weight = ActorMeshTriangulated.face_dynamic_weight(face, actor.heading, actor_pos, drone_pos[1:2])
+            cov_o = ppa_coverage_original_static(face, face_pos, n_world, drone_pos, drone_yaw)
+            po += ppa_quality_original_static(face, cov_o, weight)
         end
     end
 
@@ -199,10 +201,10 @@ function eval_ppa_static(
     ps = 0.0
     for face in actor.mesh.faces
         n_world = ActorMeshTriangulated.actor_world_normal(face, actor.heading)
-        weight  = ActorMeshTriangulated.face_dynamic_weight(face, actor.heading, actor_pos, drone_pos[1:2])
+        weight = ActorMeshTriangulated.face_dynamic_weight(face, actor.heading, actor_pos, drone_pos[1:2])
         ps += ppa_quality_smooth_static(face, weight,
-                 ppa_coverage_smooth_static(face, world_verts, drone, n_world;
-                                     focal_length=focal_length, tilt=tilt, debug=debug))
+            ppa_coverage_smooth_static(face, world_verts, drone, n_world;
+                focal_length=focal_length, tilt=tilt, debug=debug))
     end
     return po, ps
 end
@@ -284,7 +286,7 @@ function run_static_comparison(; global_max::Union{Nothing,Float64}=nothing)
     )
     scatter!(p_orig, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_orig, [drone_pos[1]], [drone_pos[2]],
-      quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     # scatter!(p_orig, [actor_x], [actor_y], shape=:circle, ms=6, mc=:white, msc=:black, label="Actor (-4,-4)")
     # quiver!(p_orig, [actor_x], [actor_y],
     #     quiver=([0.8*cos(actor_heading)], [0.8*sin(actor_heading)]), color=:white, lw=2.0, label="")
@@ -300,7 +302,7 @@ function run_static_comparison(; global_max::Union{Nothing,Float64}=nothing)
     )
     scatter!(p_smooth, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_smooth, [drone_pos[1]], [drone_pos[2]],
-        quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     # scatter!(p_smooth, [actor_x], [actor_y], shape=:circle, ms=6, mc=:white, msc=:black, label="Actor (-4,-4)")
     # quiver!(p_smooth, [actor_x], [actor_y],
     #     quiver=([0.8*cos(actor_heading)], [0.8*sin(actor_heading)]), color=:white, lw=2.0, label="")
@@ -386,7 +388,7 @@ function run_static_comparison_away(; global_max::Union{Nothing,Float64}=nothing
     )
     scatter!(p_orig, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_orig, [drone_pos[1]], [drone_pos[2]],
-        quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     # scatter!(p_orig, [actor_x], [actor_y], shape=:circle, ms=6, mc=:white, msc=:black, label="Actor (-4,-4)")
     # quiver!(p_orig, [actor_x], [actor_y],
     #     quiver=([0.8*cos(actor_heading)], [0.8*sin(actor_heading)]), color=:white, lw=2.0, label="")
@@ -402,7 +404,7 @@ function run_static_comparison_away(; global_max::Union{Nothing,Float64}=nothing
     )
     scatter!(p_smooth, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_smooth, [drone_pos[1]], [drone_pos[2]],
-        quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     # scatter!(p_smooth, [actor_x], [actor_y], shape=:circle, ms=6, mc=:white, msc=:black, label="Actor (-4,-4)")
     # quiver!(p_smooth, [actor_x], [actor_y],
     #     quiver=([0.8*cos(actor_heading)], [0.8*sin(actor_heading)]), color=:white, lw=2.0, label="")
@@ -459,7 +461,7 @@ function run_static_comparison_out_of_fov(; global_max::Union{Nothing,Float64}=n
     println("    Original PPA : $(round(po_static, digits=6))")
     println("    Smooth PPA   : $(round(ps_static, digits=6))")
 
-ppa_original = map(product(ys, xs)) do (y, x)
+    ppa_original = map(product(ys, xs)) do (y, x)
         actora = TriActorState(x, y, actor_z, actor_heading, mesh, 1)
         po_static, ps_static = eval_ppa_static(actora, drone_vec; focal_length=1.2, tilt=-0.35, debug=true)
         return po_static
@@ -483,7 +485,7 @@ ppa_original = map(product(ys, xs)) do (y, x)
     )
     scatter!(p_orig, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_orig, [drone_pos[1]], [drone_pos[2]],
-        quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     # scatter!(p_orig, [actor_x], [actor_y], shape=:circle, ms=6, mc=:white, msc=:black, label="Actor (6,4)")
     # quiver!(p_orig, [actor_x], [actor_y],
     #     quiver=([0.8*cos(actor_heading)], [0.8*sin(actor_heading)]), color=:white, lw=2.0, label="")
@@ -499,7 +501,7 @@ ppa_original = map(product(ys, xs)) do (y, x)
     )
     scatter!(p_smooth, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_smooth, [drone_pos[1]], [drone_pos[2]],
-        quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     # scatter!(p_smooth, [actor_x], [actor_y], shape=:circle, ms=6, mc=:white, msc=:black, label="Actor (6,4)")
     # quiver!(p_smooth, [actor_x], [actor_y],
     #     quiver=([0.8*cos(actor_heading)], [0.8*sin(actor_heading)]), color=:white, lw=2.0, label="")
@@ -584,7 +586,7 @@ function run_static_comparison_out_of_fov_away(; global_max::Union{Nothing,Float
     )
     scatter!(p_orig, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_orig, [drone_pos[1]], [drone_pos[2]],
-        quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     # scatter!(p_orig, [actor_x], [actor_y], shape=:circle, ms=6, mc=:white, msc=:black, label="Actor (6,4)")
     # quiver!(p_orig, [actor_x], [actor_y],
     #     quiver=([0.8*cos(actor_heading)], [0.8*sin(actor_heading)]), color=:white, lw=2.0, label="")
@@ -600,7 +602,7 @@ function run_static_comparison_out_of_fov_away(; global_max::Union{Nothing,Float
     )
     scatter!(p_smooth, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_smooth, [drone_pos[1]], [drone_pos[2]],
-        quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     # scatter!(p_smooth, [actor_x], [actor_y], shape=:circle, ms=6, mc=:white, msc=:black, label="Actor (6,4)")
     # quiver!(p_smooth, [actor_x], [actor_y],
     #     quiver=([0.8*cos(actor_heading)], [0.8*sin(actor_heading)]), color=:white, lw=2.0, label="")
@@ -651,7 +653,7 @@ function run_drone_spatial_gradient_heatmap(; global_max::Union{Nothing,Float64}
 
     # Gaussian blob: peak = PPA value, centered on actor, σ controls spread
     σ = 1.5
-    H_orig   = [po_val * exp(-((xi - actor_x)^2 + (yi - actor_y)^2) / (2σ^2)) for yi in ys, xi in xs]
+    H_orig = [po_val * exp(-((xi - actor_x)^2 + (yi - actor_y)^2) / (2σ^2)) for yi in ys, xi in xs]
     H_smooth = [ps_val * exp(-((xi - actor_x)^2 + (yi - actor_y)^2) / (2σ^2)) for yi in ys, xi in xs]
 
     max_val = global_max === nothing ? max(po_val, ps_val, 1e-4) : global_max
@@ -665,10 +667,10 @@ function run_drone_spatial_gradient_heatmap(; global_max::Union{Nothing,Float64}
     )
     scatter!(p_orig, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_orig, [drone_pos[1]], [drone_pos[2]],
-        quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     scatter!(p_orig, [actor_x], [actor_y], shape=:circle, ms=6, mc=:white, msc=:black, label="Actor (-4,-4)")
     quiver!(p_orig, [actor_x], [actor_y],
-        quiver=([0.8*cos(actor_heading)], [0.8*sin(actor_heading)]), color=:white, lw=2.0, label="")
+        quiver=([0.8 * cos(actor_heading)], [0.8 * sin(actor_heading)]), color=:white, lw=2.0, label="")
     annotate!(p_orig, actor_x + 0.8, actor_y - 0.7,
         text("PPA=$(round(po_val, digits=4))", :white, :left, 8))
 
@@ -681,10 +683,10 @@ function run_drone_spatial_gradient_heatmap(; global_max::Union{Nothing,Float64}
     )
     scatter!(p_smooth, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_smooth, [drone_pos[1]], [drone_pos[2]],
-        quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     scatter!(p_smooth, [actor_x], [actor_y], shape=:circle, ms=6, mc=:white, msc=:black, label="Actor (-4,-4)")
     quiver!(p_smooth, [actor_x], [actor_y],
-        quiver=([0.8*cos(actor_heading)], [0.8*sin(actor_heading)]), color=:white, lw=2.0, label="")
+        quiver=([0.8 * cos(actor_heading)], [0.8 * sin(actor_heading)]), color=:white, lw=2.0, label="")
     annotate!(p_smooth, actor_x + 0.8, actor_y - 0.7,
         text("PPA=$(round(ps_val, digits=4))", :white, :left, 8))
 
@@ -717,21 +719,21 @@ function run_combined_all_experiments(; global_max::Union{Nothing,Float64}=nothi
     # "facing the camera" (0°); 180° = facing away. Matches each experiment
     # function's setup for the toward/away cases.
     scenarios = [
-        (-4.0, -4.0,   0.0, "(-4,-4) Toward"),
-        (-4.0,  0.0, 180.0, "(-4,0) Away"),
-        ( 6.0,  4.0,   0.0, "(6,4) Toward — OOF"),
-        ( 6.0, -2.0, 180.0, "(6,-2) Away — OOF"),
-        ( 0.0,  0.0,   0.0, "(0,0) Toward"),
-        (-6.5, -6.5,   0.0, "(-6.5,-6.5) Toward"),
-        (-7.0,  7.5, 180.0, "(-7,7.5) Away"),
-        (-6.5,  3.0,  45.0, "(-6.5,3) 45°"),
-        ( 2.6, -0.5,   0.0, "(2.6,-0.5) Partial FOV"),
+        (-4.0, -4.0, 0.0, "(-4,-4) Toward"),
+        (-4.0, 0.0, 180.0, "(-4,0) Away"),
+        (6.0, 4.0, 0.0, "(6,4) Toward — OOF"),
+        (6.0, -2.0, 180.0, "(6,-2) Away — OOF"),
+        (0.0, 0.0, 0.0, "(0,0) Toward"),
+        (-6.5, -6.5, 0.0, "(-6.5,-6.5) Toward"),
+        (-7.0, 7.5, 180.0, "(-7,7.5) Away"),
+        (-6.5, 3.0, 45.0, "(-6.5,3) 45°"),
+        (2.6, -0.5, 0.0, "(2.6,-0.5) Partial FOV"),
     ]
 
     results = NamedTuple[]
     for (actor_x, actor_y, offset_deg, label) in scenarios
         heading_toward = atan(drone_pos[2] - actor_y, drone_pos[1] - actor_x)
-        actor_heading  = heading_toward + deg2rad(offset_deg)
+        actor_heading = heading_toward + deg2rad(offset_deg)
         actor = TriActorState(actor_x, actor_y, 0.0, actor_heading, mesh, 1)
         po, ps = eval_ppa_static(actor, drone_vec; focal_length=1.2, tilt=-0.35)
         println("  $label : Original=$(round(po, digits=4))  Smooth=$(round(ps, digits=4))")
@@ -744,10 +746,10 @@ function run_combined_all_experiments(; global_max::Union{Nothing,Float64}=nothi
     ys = range(-8.0, 8.0, length=grid_size)
     σ = 1.5
 
-    H_orig   = zeros(length(ys), length(xs))
+    H_orig = zeros(length(ys), length(xs))
     H_smooth = zeros(length(ys), length(xs))
     for r in results
-        H_orig   .+= [r.po * exp(-((xi - r.x)^2 + (yi - r.y)^2) / (2σ^2)) for yi in ys, xi in xs]
+        H_orig .+= [r.po * exp(-((xi - r.x)^2 + (yi - r.y)^2) / (2σ^2)) for yi in ys, xi in xs]
         H_smooth .+= [r.ps * exp(-((xi - r.x)^2 + (yi - r.y)^2) / (2σ^2)) for yi in ys, xi in xs]
     end
 
@@ -762,11 +764,11 @@ function run_combined_all_experiments(; global_max::Union{Nothing,Float64}=nothi
     )
     scatter!(p_orig, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_orig, [drone_pos[1]], [drone_pos[2]],
-        quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     for (i, r) in enumerate(results)
         scatter!(p_orig, [r.x], [r.y], shape=:circle, ms=6, mc=:white, msc=:black, label="")
         quiver!(p_orig, [r.x], [r.y],
-            quiver=([0.8*cos(r.heading)], [0.8*sin(r.heading)]), color=:white, lw=2.0,
+            quiver=([0.8 * cos(r.heading)], [0.8 * sin(r.heading)]), color=:white, lw=2.0,
             arrow=Plots.arrow(0.10, 0.10), label="")
         annotate!(p_orig, r.x + 0.8, r.y - 0.7,
             text("PPA$(i)=$(round(r.po, digits=4))", :black, :left, 7))
@@ -781,11 +783,11 @@ function run_combined_all_experiments(; global_max::Union{Nothing,Float64}=nothi
     )
     scatter!(p_smooth, [drone_pos[1]], [drone_pos[2]], shape=:rect, ms=8, mc=:white, msc=:black, label="Drone (4,0,2)")
     quiver!(p_smooth, [drone_pos[1]], [drone_pos[2]],
-        quiver=([0.9*cos(drone_yaw)], [0.9*sin(drone_yaw)]), color=:white, lw=2.5, label="")
+        quiver=([0.9 * cos(drone_yaw)], [0.9 * sin(drone_yaw)]), color=:white, lw=2.5, label="")
     for (i, r) in enumerate(results)
         scatter!(p_smooth, [r.x], [r.y], shape=:circle, ms=6, mc=:white, msc=:black, label="")
         quiver!(p_smooth, [r.x], [r.y],
-            quiver=([0.8*cos(r.heading)], [0.8*sin(r.heading)]), color=:white, lw=2.0,
+            quiver=([0.8 * cos(r.heading)], [0.8 * sin(r.heading)]), color=:white, lw=2.0,
             arrow=Plots.arrow(0.10, 0.10), label="")
         annotate!(p_smooth, r.x + 0.8, r.y - 0.7,
             text("PPA$(i)=$(round(r.ps, digits=4))", :black, :left, 7))

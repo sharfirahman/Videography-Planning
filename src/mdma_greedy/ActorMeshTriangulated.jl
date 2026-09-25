@@ -47,7 +47,7 @@ function triangle_geometry(m)
 end
 
 function obj_material_face_groups(path::String)
-    groups = Dict{Symbol, Vector{Int}}()
+    groups = Dict{Symbol,Vector{Int}}()
     current = :default
     face_idx = 0
     for line in eachline(path)
@@ -100,8 +100,8 @@ function actor_world_vertices(mesh::TriMeshStruct, x::Float64, y::Float64, z::Fl
     c, s = cos(heading), sin(heading)
     world_vertices = Vector{Vector{Float64}}(undef, length(mesh.vertices))
     for (i, v) in enumerate(mesh.vertices)
-        wx = x + c*v[1] - s*v[2]
-        wy = y + s*v[1] + c*v[2]
+        wx = x + c * v[1] - s * v[2]
+        wy = y + s * v[1] + c * v[2]
         wz = z + v[3]
         world_vertices[i] = [wx, wy, wz]
     end
@@ -110,16 +110,16 @@ end
 
 function actor_world_face_center(mesh::TriMeshStruct, face::TriFace, x::Float64, y::Float64, z::Float64, heading::Float64)
     c, s = cos(heading), sin(heading)
-    wx = x + face.center[1]*c - face.center[2]*s
-    wy = y + face.center[1]*s + face.center[2]*c
+    wx = x + face.center[1] * c - face.center[2] * s
+    wy = y + face.center[1] * s + face.center[2] * c
     wz = z + face.center[3]
     return [wx, wy, wz]
 end
 
 function actor_world_normal(face::TriFace, heading::Float64)
     c, s = cos(heading), sin(heading)
-    nx = face.normal[1]*c - face.normal[2]*s
-    ny = face.normal[1]*s + face.normal[2]*c
+    nx = face.normal[1] * c - face.normal[2] * s
+    ny = face.normal[1] * s + face.normal[2] * c
     nz = face.normal[3]
     return [nx, ny, nz]
 end
@@ -146,8 +146,8 @@ end
 # Instead compare the actor's overall `heading` to θ_pref, so the weight
 # reflects which way the actor as a whole is facing.
 function face_dynamic_weight(face::TriFace, heading::Float64, actor_pos::Vector{Float64}, camera_pos::Vector{Float64})
-    θ_pref = atan(camera_pos[2] - actor_pos[2], camera_pos[1] - actor_pos[1])
-    return exp(-face.a * angular_difference(heading, θ_pref))
+    #θ_pref = atan(camera_pos[2] - actor_pos[2], camera_pos[1] - actor_pos[1])
+    return exp(-face.a * angular_difference(heading, 0.0))
 end
 
 end # module
