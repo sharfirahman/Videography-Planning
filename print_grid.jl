@@ -1,5 +1,5 @@
 include("MPCRun.jl")
-include("src/mdma_greedy/OriginalPPAvssmooth.jl")
+include("src/CompositionAwareFilming/OriginalPPAvssmooth.jl")
 using Plots
 fig8_cmap = cgrad([:darkblue, :blue, :cyan, :yellow, :orange, :red])
 

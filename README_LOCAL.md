@@ -24,12 +24,12 @@ Download the specific julia version in the project folder:
     - Set environment variables properly
     - In order to not alter the original path, create a ssymbolic link for the julia path setup which is handled by conda:
             ln -sf $HOME/dev/MultiDroneMultiActorFilming/julia-1.8.2/bin/julia $CONDA_PREFIX/bin/julia
-            export JULIA_LOAD_PATH="$PROJECT_DIR:$PROJECT_DIR/src/mdma_greedy:$PROJECT_DIR/env"
+            export JULIA_LOAD_PATH="$PROJECT_DIR:$PROJECT_DIR/src/CompositionAwareFilming:$PROJECT_DIR/env"
             export JULIA_NUM_THREADS=12
             export DISPLAY="$DISPLAY"
     - If you are using conda, set the variable in conda environment so conda can handle it:
         conda env config vars set PROJECT_DIR="$HOME/dev/MultiDroneMultiActorFilming"
-        conda env config vars set JULIA_LOAD_PATH="$PROJECT_DIR:$PROJECT_DIR/src/mdma_greedy:$PROJECT_DIR/env"
+        conda env config vars set JULIA_LOAD_PATH="$PROJECT_DIR:$PROJECT_DIR/src/CompositionAwareFilming:$PROJECT_DIR/env"
         conda env config vars set JULIA_NUM_THREADS=12
         conda env config vars set DISPLAY="$DISPLAY"
 

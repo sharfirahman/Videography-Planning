@@ -2,7 +2,7 @@
 # Experiment: same settings as first_person_view.jl + Rule-of-Thirds overlay.
 #
 # Run from the project root with the videography_planning conda env:
-#   conda run -n videography_planning julia src/mdma_greedy/first_person_view_rot.jl
+#   conda run -n videography_planning julia src/CompositionAwareFilming/first_person_view_rot.jl
 
 ENV["GKSwstype"] = "100"
 
@@ -59,7 +59,7 @@ const FPV_TILT      = -0.35
 const FPV_FOV       =  1.2
 const FPV_VIEW_SIZE =  0.68
 
-const OUTPUT_FILE   = "src/mdma_greedy/drone_experiments/drone_follows_actor_fpv_rot.gif"
+const OUTPUT_FILE   = "src/CompositionAwareFilming/drone_experiments/drone_follows_actor_fpv_rot.gif"
 const FPS           = 12
 const WORLD_XLIMS   = (-6.0,  6.0)
 const WORLD_YLIMS   = (-6.0,  6.0)

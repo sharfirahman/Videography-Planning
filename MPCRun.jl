@@ -1,15 +1,15 @@
 # Formulations
 
-include("./src/mdma_greedy/ActorMesh.jl")
-include("./src/mdma_greedy/ActorTrajectory.jl")
-include("./src/mdma_greedy/artistic_rules.jl")
-include("./src/mdma_greedy/MPC.jl")
+include("./src/CompositionAwareFilming/ActorMesh.jl")
+include("./src/CompositionAwareFilming/ActorTrajectory.jl")
+include("./src/CompositionAwareFilming/artistic_rules.jl")
+include("./src/CompositionAwareFilming/MPC.jl")
 
 
 
 #Visualization
 
-include("./src/mdma_greedy/DroneVisualizationFPV.jl")
+include("./src/CompositionAwareFilming/DroneVisualizationFPV.jl")
 
 
 
